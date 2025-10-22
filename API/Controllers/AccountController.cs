@@ -13,7 +13,7 @@ namespace API.Controllers;
     [HttpPost("register")]
     public async Task<ActionResult<AppUser>> Register(RegisterDTO registerDTO)
     {
-        if (await EmailExists(registerDTO.Email)) 
+        if (await EmailExists(registerDTO.Email))
             return BadRequest("Email is already in use");
         using var hmac = new HMACSHA512();
         var user = new AppUser
@@ -27,6 +27,13 @@ namespace API.Controllers;
         await context.SaveChangesAsync();
         return user;
     }
+    [HttpPost("login")]
+    public async Task<ActionResult<AppUser>> Login(LoginDto loginDto)
+        {
+        var user = await context.Users.SingleOrDefaultAsync(x => x.Email == loginDto.Email);
+        if (user == null) return Unauthorized("Invalid email");
+        
+        }
         private async Task<bool> EmailExists(string email)
         {
             return await context.Users.AnyAsync(x => x.Email.ToLower() == email.ToLower());   
