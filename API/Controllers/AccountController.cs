@@ -6,12 +6,13 @@ using System.Security.Cryptography;
 using System.Text;
 using API.DTOs;
 using Microsoft.EntityFrameworkCore;
+using API.Interfaces;
 namespace API.Controllers;
 
-    public class AccountController(AppDbContext context) : BaseApiController
-    {
+public class AccountController(AppDbContext context, ITokenService tokenService) : BaseApiController
+{
     [HttpPost("register")]
-    public async Task<ActionResult<AppUser>> Register(RegisterDTO registerDTO)
+    public async Task<ActionResult<UserDto>> Register(RegisterDTO registerDTO)
     {
         if (await EmailExists(registerDTO.Email))
             return BadRequest("Email is already in use");
@@ -25,18 +26,38 @@ namespace API.Controllers;
         };
         context.Users.Add(user);
         await context.SaveChangesAsync();
-        return user;
+        return new UserDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            DisplayName = user.DisplayName,   
+            Token =  tokenService.CreateToken(user)// Token generation to be implemented
+        };
     }
     [HttpPost("login")]
-    public async Task<ActionResult<AppUser>> Login(LoginDto loginDto)
-        {
+    public async Task<ActionResult<UserDto>> Login(LoginDto loginDto)
+    {
         var user = await context.Users.SingleOrDefaultAsync(x => x.Email == loginDto.Email);
         if (user == null) return Unauthorized("Invalid email");
-        
-        }
-        private async Task<bool> EmailExists(string email)
+
+        using var hmac = new HMACSHA512(user.PasswordSalt);
+        var computedHash = hmac.ComputeHash(Encoding.UTF8.GetBytes(loginDto.Password));
+        for (int i = 0; i < computedHash.Length; i++)
         {
-            return await context.Users.AnyAsync(x => x.Email.ToLower() == email.ToLower());   
+            if (computedHash[i] != user.PasswordHash[i]) return Unauthorized("Invalid password");
         }
+        return new UserDto
+        {
+            Id = user.Id,
+            Email = user.Email,
+            DisplayName = user.DisplayName,
+            Token = tokenService.CreateToken(user)
+        };
+
     }
+    private async Task<bool> EmailExists(string email)
+    {
+        return await context.Users.AnyAsync(x => x.Email.ToLower() == email.ToLower());
+    }
+}
 
